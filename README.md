@@ -21,6 +21,7 @@ Create `.env.local` from `.env.example` and add:
 GEMINI_API_KEY=
 GROQ_API_KEY=
 ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=
 ```
 
 Optional model settings are also documented in `.env.example`.
