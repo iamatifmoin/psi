@@ -25,17 +25,18 @@ export async function POST(request: Request) {
     const audioPath = path.join(jobDir, "audio.mp3");
     await fs.writeFile(sourcePath, Buffer.from(await file.arrayBuffer()));
     const metadata = await probeMedia(sourcePath);
-    if (!metadata.duration || metadata.duration > 180) return failure("Please use a gameplay video shorter than 3 minutes.", 400);
+    if (!metadata.duration || metadata.duration > 180) return failure("Please use a video shorter than 3 minutes.", 400);
     await extractAudio(sourcePath, audioPath);
-    const [transcript, visuals] = await Promise.all([transcribeAudio(audioPath), scanVisuals(sourcePath)]);
+    const [transcript, visuals] = await Promise.all([
+      transcribeAudio(audioPath),
+      scanVisuals(sourcePath),
+    ]);
     const timeline: TimelinePayload = { duration: metadata.duration, transcript, visuals };
     const directorDecision = await directHighlight(timeline);
-    const decision = {
-      ...directorDecision,
-      clips: directorDecision.clips.map((clip) => ({ ...clip, energy_score: calculateEnergyScore(clip.start_time, clip.end_time, transcript, visuals) })),
-    };
+    const decision = { ...directorDecision, clips: directorDecision.clips.map((clip) => ({ ...clip, energy_score: calculateEnergyScore(clip.start_time, clip.end_time, transcript, visuals) })) };
     const rendered = await renderHighlight({ sourcePath, jobDir, decision, transcript });
-    await fs.stat(path.join(process.cwd(), rendered.videoUrl.replace(/^\//, "")));
+    const outputPath = path.join(process.cwd(), "public", rendered.videoUrl.replace(/^\//, ""));
+    await fs.stat(outputPath);
     return Response.json({ videoUrl: rendered.videoUrl, transcript, clips: rendered.clips, introNarration: decision.intro_narration, outroNarration: decision.outro_narration, duration: metadata.duration });
   } catch (error) {
     return failure(error instanceof Error ? error.message : "Video generation failed.", 500);

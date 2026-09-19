@@ -1,6 +1,6 @@
 # AI Director's Cut
 
-Local web app that turns a short gameplay MP4 into an AI-directed highlight reel.
+Local web app that turns a short video MP4 into an AI-directed highlight reel.
 
 The pipeline extracts speech, scans visual scene changes, asks Gemini to select the strongest moments and write narration, uses ElevenLabs for voiceover, and assembles the final MP4 with FFmpeg.
 
@@ -27,7 +27,7 @@ Optional model settings are also documented in `.env.example`.
 
 ## Local requirement
 
-No separate FFmpeg installation is required for the normal Node workflow; the project uses the bundled `ffmpeg-static` binary. Use short English MP4 gameplay videos, ideally under two minutes and 250 MB.
+No separate FFmpeg installation is required for the normal Node workflow; the project uses the bundled `ffmpeg-static` binary. Use short English MP4 videos, ideally under two minutes and 250 MB.
 
 ## Demo flow
 

@@ -2,7 +2,7 @@
 
 ## Objective
 
-Transform a short raw gameplay MP4 into a concise highlight reel using transcript-aware AI clip selection, FFmpeg rendering, and AI voice narration.
+Transform a short raw MP4 into a concise highlight reel using transcript-aware AI clip selection, FFmpeg rendering, and AI voice narration.
 
 The priority is a reliable end-to-end local demo, not production scale.
 
@@ -10,7 +10,7 @@ The priority is a reliable end-to-end local demo, not production scale.
 
 - Local web application running on `localhost`.
 - One local user and one active processing job.
-- English gameplay videos only for the first MVP.
+- English videos only for the first MVP.
 - MP4 input only.
 - Short source videos; test files are expected to remain below the speech API limits.
 - User uploads a video, then explicitly starts generation.
@@ -62,14 +62,14 @@ The LLM receives the transcript and timeline metadata and must return strict JSO
 
 The UI will not expose private chain-of-thought or verbose selection reasoning.
 
-Clip selection should favor gameplay moments with spoken excitement, strong language/emotion, sudden changes, high visual activity, or meaningful narrative context.
+Clip selection should favor best moments with spoken excitement, strong language/emotion, sudden changes, high visual activity, or meaningful narrative context.
 
 ## Rendering
 
 - Concatenate the selected source ranges into one highlight video.
 - Add intro narration before the highlights.
 - Add outro narration after the highlights.
-- Keep source gameplay audio during clips.
+- Keep source video audio during clips.
 - Duck source audio substantially while narration plays and restore it afterward.
 - Normalize output to a practical MVP format, likely H.264/AAC MP4.
 - Background music, subtitles, visual overlays, and transitions are deferred unless they are nearly free after the vertical slice works.

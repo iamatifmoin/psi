@@ -52,14 +52,14 @@ async function renderClip(input: string, output: string, start: number, duration
   ];
   if (subtitlePath) filters.push(`subtitles='${subtitlePath.replace(/'/g, "\\'")}'`);
   await new Promise<void>((resolve, reject) => {
-    ffmpeg(input).setStartTime(start).duration(duration).videoFilters(filters).outputOptions(["-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run();
+    ffmpeg(input).setStartTime(start).duration(duration).videoFilters(filters).outputOptions(["-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k", "-movflags", "+faststart"]).output(output).on("end", resolve).on("error", reject).run();
   });
 }
 
 async function concatSegments(segments: string[], output: string): Promise<void> {
   const listPath = path.join(path.dirname(output), "concat.txt");
   await fs.writeFile(listPath, segments.map((segment) => `file '${segment.replaceAll("'", "'\\''")}'`).join("\n"));
-  await new Promise<void>((resolve, reject) => { ffmpeg().input(listPath).inputOptions(["-f", "concat", "-safe", "0"]).outputOptions(["-c", "copy", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run(); });
+  await new Promise<void>((resolve, reject) => { ffmpeg().input(listPath).inputOptions(["-f", "concat", "-safe", "0"]).outputOptions(["-c", "copy", "-movflags", "+faststart"]).output(output).on("end", resolve).on("error", reject).run(); });
 }
 
 async function renderNarratedHighlights(highlights: string, intro: string, outro: string, highlightDuration: number, introDuration: number, outroDuration: number, outroStart: number, output: string): Promise<void> {
@@ -70,7 +70,7 @@ async function renderNarratedHighlights(highlights: string, intro: string, outro
       `[0:a]volume=0.28:enable='${duckExpression}'[ducked]`,
       "[2:a]adelay=" + outroDelay + "|" + outroDelay + "[outro_delayed]",
       "[ducked][1:a][outro_delayed]amix=inputs=3:duration=first:dropout_transition=0[mixed]",
-    ]).outputOptions(["-map", "0:v", "-map", "[mixed]", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run();
+    ]).outputOptions(["-map", "0:v", "-map", "[mixed]", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart"]).output(output).on("end", resolve).on("error", reject).run();
   });
 }
 

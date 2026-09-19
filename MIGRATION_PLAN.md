@@ -14,7 +14,7 @@
 
 - `components/Chat.tsx`: replace with upload/studio interface.
 - `app/api/generate-video/route.ts`: replace product scraping and stock-asset orchestration with media pipeline orchestration.
-- `lib/director.ts`: replace product/social-video schema with gameplay timeline/director schema.
+- `lib/director.ts`: replace product/social-video schema with video timeline/director schema.
 - `lib/render.ts`: refactor from stock/GIF compositing into source clip slicing, narration insertion, and ducking.
 - `lib/anthropic.ts`: replace or generalize as a Gemini client helper.
 - `lib/scrape.ts`, Pexels, and Giphy helpers: remove from the active path; delete only after confirming no remaining imports.
@@ -47,7 +47,7 @@
 
 - Slice and concatenate source ranges with FFmpeg.
 - Generate intro/outro audio with ElevenLabs.
-- Mix narration and gameplay audio with ducking.
+- Mix narration and audio with ducking.
 - Return a playable final MP4.
 
 ### Slice 5 — Studio polish
@@ -75,7 +75,7 @@ Do not spend MVP time on:
 Only verify the vertical path:
 
 1. App starts with the documented commands.
-2. A sample gameplay MP4 uploads and previews.
+2. A sample MP4 uploads and previews.
 3. Transcript segments contain timestamps.
 4. Director output parses as valid bounded clip ranges.
 5. Final MP4 exists and plays.

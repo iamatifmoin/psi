@@ -6,7 +6,7 @@
 2. Confirm FFmpeg is available through the existing bundled configuration.
 3. Create `.env.local` from `.env.example`.
 4. Add the Gemini, Groq, and ElevenLabs keys locally. Never commit this file.
-5. Place two short gameplay MP4s where they are easy to select.
+5. Place two short MP4s where they are easy to select.
 6. Run one complete generation before presenting.
 7. Confirm the final MP4 download works.
 
@@ -24,7 +24,7 @@ Open `http://localhost:3000`.
 ## Presentation flow
 
 1. Open the AI Director's Cut studio.
-2. Drop in the gameplay MP4.
+2. Drop in the MP4.
 3. Show the original preview and file metadata.
 4. Click `Generate Highlight`.
 5. Let the staged progress labels communicate the pipeline.
@@ -40,7 +40,7 @@ Open `http://localhost:3000`.
 
 - Keep a previously generated MP4 available in the local output directory.
 - If a provider rate limit occurs, explain that the pipeline is provider-backed and show the already-rendered result.
-- If the first sample produces weak selections, use the second gameplay sample rather than changing code during the demo.
+- If the first sample produces weak selections, use the second video sample rather than changing code during the demo.
 
 ## Demo acceptance checklist
 

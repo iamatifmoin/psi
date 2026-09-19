@@ -21,7 +21,7 @@ const caption = localFont({
 
 export const metadata: Metadata = {
   title: "AI Director's Cut",
-  description: "Turn raw gameplay into an AI-directed highlight reel.",
+  description: "Turn videos into an AI-directed highlight reel.",
 };
 
 export default function RootLayout({
