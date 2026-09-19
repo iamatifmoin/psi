@@ -1,79 +1,41 @@
-import { NextRequest } from "next/server";
-import { classifyApiError } from "@/lib/api-errors";
-import { scrapeUrl } from "@/lib/scrape";
-import { directVideo } from "@/lib/director";
-import { searchPexelsVideo } from "@/lib/assets/pexels";
-import { searchGiphy } from "@/lib/assets/giphy";
-import { audioFileForMood } from "@/lib/assets/audio";
-import { renderVideo } from "@/lib/render";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { extractAudio, probeMedia, scanVisuals, type TimelinePayload } from "@/lib/media-analysis";
+import { transcribeAudio } from "@/lib/groq";
+import { directHighlight } from "@/lib/gemini";
+import { renderHighlight } from "@/lib/render";
 
 export const runtime = "nodejs";
-// The whole pipeline (scrape -> director -> fetch -> ffmpeg) runs in one
-// request. Fine for a take-home; a production build would make this an async
-// job with a poll/webhook so we don't hold an HTTP connection open this long.
-// Hobby max is 60s (legacy) or 300s (fluid compute); 60 is enough for this pipeline.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-export async function POST(req: NextRequest) {
-  let message = "";
-  let url: string | null = null;
-
+export async function POST(request: Request) {
+  const id = randomUUID();
+  const jobDir = path.join(process.cwd(), "tmp", id);
   try {
-    const body = await req.json();
-    message = typeof body?.message === "string" ? body.message : "";
-    url = typeof body?.url === "string" ? body.url : null;
-  } catch {
-    return Response.json({ error: "Invalid request body" }, { status: 400 });
-  }
-
-  if (!message.trim() && !url) {
-    return Response.json({ error: "Nothing to work with" }, { status: 400 });
-  }
-
-  // 1) Scrape (graceful fallback to the user's own words).
-  let scrapeFailed = false;
-  let scrapedContent = "";
-  if (url) {
-    const scraped = await scrapeUrl(url);
-    scrapeFailed = !scraped.ok;
-    scrapedContent = scraped.content;
-  }
-
-  // 2) Creative director plan.
-  let plan;
-  try {
-    plan = await directVideo({ userMessage: message, scrapedContent });
-  } catch (err) {
-    return Response.json(classifyApiError(err, "anthropic"), { status: 502 });
-  }
-
-  // 3) Fetch assets in parallel.
-  let pexels, giphy, audioPath;
-  try {
-    [pexels, giphy] = await Promise.all([
-      searchPexelsVideo(plan.pexels_query),
-      searchGiphy(plan.giphy_query),
-    ]);
-    audioPath = audioFileForMood(plan.audio_mood);
-  } catch (err) {
-    const source = errMsg(err).toLowerCase().includes("giphy") ? "giphy" : "pexels";
-    return Response.json(classifyApiError(err, source), { status: 502 });
-  }
-
-  // 4) Composite with ffmpeg.
-  try {
-    const videoUrl = await renderVideo({ plan, pexels, giphy, audioPath });
-    return Response.json({
-      videoUrl,
-      caption: plan.hook_caption,
-      plan,
-      scrapeFailed,
-    });
-  } catch (err) {
-    return Response.json(classifyApiError(err, "app"), { status: 500 });
-  }
+    const form = await request.formData();
+    const file = form.get("video");
+    if (!(file instanceof File)) return failure("Please choose an MP4 video.", 400);
+    if (file.type !== "video/mp4" && !file.name.toLowerCase().endsWith(".mp4")) return failure("Only MP4 uploads are supported.", 400);
+    if (file.size > 250 * 1024 * 1024) return failure("Please use a short video under 250 MB.", 400);
+    await fs.mkdir(jobDir, { recursive: true });
+    const sourcePath = path.join(jobDir, "source.mp4");
+    const audioPath = path.join(jobDir, "audio.mp3");
+    await fs.writeFile(sourcePath, Buffer.from(await file.arrayBuffer()));
+    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    await fs.mkdir(uploadDir, { recursive: true });
+    await fs.copyFile(sourcePath, path.join(uploadDir, `${id}.mp4`));
+    const metadata = await probeMedia(sourcePath);
+    if (!metadata.duration || metadata.duration > 180) return failure("Please use a gameplay video shorter than 3 minutes.", 400);
+    await extractAudio(sourcePath, audioPath);
+    const [transcript, visuals] = await Promise.all([transcribeAudio(audioPath), scanVisuals(sourcePath)]);
+    const timeline: TimelinePayload = { duration: metadata.duration, transcript, visuals };
+    const decision = await directHighlight(timeline);
+    const rendered = await renderHighlight({ sourcePath, jobDir, decision });
+    return Response.json({ originalUrl: `/uploads/${id}.mp4`, videoUrl: rendered.videoUrl, transcript, clips: decision.clips, introNarration: decision.intro_narration, outroNarration: decision.outro_narration, duration: metadata.duration });
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : "Video generation failed.", 500);
+  } finally { await fs.rm(jobDir, { recursive: true, force: true }).catch(() => undefined); }
 }
 
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
+function failure(error: string, status: number): Response { return Response.json({ error, errorSource: "app", errorKind: "internal", external: false }, { status }); }

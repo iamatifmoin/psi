@@ -20,9 +20,8 @@ const caption = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Rizz-ult - UGC video chatbot",
-  description:
-    "Chat your product in, get a funny UGC video out. AI-organized, not AI-generated.",
+  title: "AI Director's Cut",
+  description: "Turn raw gameplay into an AI-directed highlight reel.",
 };
 
 export default function RootLayout({
