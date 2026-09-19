@@ -46,3 +46,5 @@ next-env.d.ts
 # AssembleAI generated/working files
 /tmp/
 /public/videos/*.mp4
+/public/generated/
+/public/uploads/

@@ -1,6 +1,4 @@
 import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
 import ffmpeg from "fluent-ffmpeg";
 import { FFMPEG_PATH } from "@/lib/ffmpeg-config";
 
@@ -42,5 +40,3 @@ export async function scanVisuals(inputPath: string): Promise<VisualObservation[
   const fallback = Array.from({ length: Math.ceil(duration / 2) }, (_, index) => ({ time: index * 2, score: 0.5, kind: "visual_energy" as const }));
   return fallback;
 }
-
-export function ensureParent(filePath: string): void { fs.mkdirSync(path.dirname(filePath), { recursive: true }); }
