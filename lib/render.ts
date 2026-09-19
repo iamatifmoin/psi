@@ -24,9 +24,13 @@ export async function renderHighlight(input: { sourcePath: string; jobDir: strin
   await Promise.all([synthesizeSpeech(input.decision.intro_narration, introPath), synthesizeSpeech(input.decision.outro_narration, outroPath)]);
 
   const highlightDuration = (await probeMedia(highlightsPath)).duration;
-  const introDuration = Math.min(highlightDuration, Math.max(0.1, (await probeMedia(introPath)).duration));
-  const outroDuration = Math.min(highlightDuration, Math.max(0.1, (await probeMedia(outroPath)).duration));
-  const outroStart = Math.max(0, highlightDuration - outroDuration);
+  const introSourceDuration = Math.max(0.1, (await probeMedia(introPath)).duration);
+  const outroSourceDuration = Math.max(0.1, (await probeMedia(outroPath)).duration);
+  const cleanGameplayGap = Math.min(4, Math.max(1, highlightDuration - 1));
+  const narrationSlot = Math.max(0.5, (highlightDuration - cleanGameplayGap) / 2);
+  const introDuration = Math.min(introSourceDuration, 3, narrationSlot);
+  const outroDuration = Math.min(outroSourceDuration, 3, narrationSlot);
+  const outroStart = Math.min(highlightDuration - outroDuration, Math.max(introDuration + cleanGameplayGap, highlightDuration - outroDuration));
 
   const renderedClips: RenderedClip[] = [];
   let resultOffset = 0;
@@ -38,7 +42,7 @@ export async function renderHighlight(input: { sourcePath: string; jobDir: strin
   const outputDir = path.join(process.cwd(), "public", "generated");
   await fs.mkdir(outputDir, { recursive: true });
   const outputName = `${path.basename(input.jobDir)}.mp4`;
-  await renderNarratedHighlights(highlightsPath, introPath, outroPath, highlightDuration, introDuration, outroDuration, outroStart, path.join(outputDir, outputName));
+  await renderNarratedHighlights(highlightsPath, introPath, outroPath, highlightDuration, introSourceDuration, outroSourceDuration, introDuration, outroDuration, outroStart, path.join(outputDir, outputName));
   return { videoUrl: `/generated/${outputName}`, clips: renderedClips };
 }
 
@@ -52,26 +56,37 @@ async function renderClip(input: string, output: string, start: number, duration
   ];
   if (subtitlePath) filters.push(`subtitles='${subtitlePath.replace(/'/g, "\\'")}'`);
   await new Promise<void>((resolve, reject) => {
-    ffmpeg(input).setStartTime(start).duration(duration).videoFilters(filters).outputOptions(["-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k", "-movflags", "+faststart"]).output(output).on("end", resolve).on("error", reject).run();
+    ffmpeg(input).setStartTime(start).duration(duration).videoFilters(filters).outputOptions(["-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run();
   });
 }
 
 async function concatSegments(segments: string[], output: string): Promise<void> {
   const listPath = path.join(path.dirname(output), "concat.txt");
   await fs.writeFile(listPath, segments.map((segment) => `file '${segment.replaceAll("'", "'\\''")}'`).join("\n"));
-  await new Promise<void>((resolve, reject) => { ffmpeg().input(listPath).inputOptions(["-f", "concat", "-safe", "0"]).outputOptions(["-c", "copy", "-movflags", "+faststart"]).output(output).on("end", resolve).on("error", reject).run(); });
+  await new Promise<void>((resolve, reject) => { ffmpeg().input(listPath).inputOptions(["-f", "concat", "-safe", "0"]).outputOptions(["-c", "copy", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run(); });
 }
 
-async function renderNarratedHighlights(highlights: string, intro: string, outro: string, highlightDuration: number, introDuration: number, outroDuration: number, outroStart: number, output: string): Promise<void> {
+async function renderNarratedHighlights(highlights: string, intro: string, outro: string, highlightDuration: number, introSourceDuration: number, outroSourceDuration: number, introDuration: number, outroDuration: number, outroStart: number, output: string): Promise<void> {
   const duckExpression = `between(t,0,${introDuration})+between(t,${outroStart},${highlightDuration})`;
   const outroDelay = Math.round(outroStart * 1000);
   await new Promise<void>((resolve, reject) => {
     ffmpeg().input(highlights).input(intro).input(outro).complexFilter([
       `[0:a]volume=0.28:enable='${duckExpression}'[ducked]`,
-      "[2:a]adelay=" + outroDelay + "|" + outroDelay + "[outro_delayed]",
-      "[ducked][1:a][outro_delayed]amix=inputs=3:duration=first:dropout_transition=0[mixed]",
-    ]).outputOptions(["-map", "0:v", "-map", "[mixed]", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart"]).output(output).on("end", resolve).on("error", reject).run();
+      `${fitVoiceover("[1:a]", introSourceDuration, introDuration)}[intro_voice]`,
+      `${fitVoiceover("[2:a]", outroSourceDuration, outroDuration)}[outro_voice]`,
+      "[outro_voice]adelay=" + outroDelay + "|" + outroDelay + "[outro_delayed]",
+      "[ducked][intro_voice][outro_delayed]amix=inputs=3:duration=first:dropout_transition=0[mixed]",
+    ]).outputOptions(["-map", "0:v", "-map", "[mixed]", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run();
   });
+}
+
+function fitVoiceover(input: string, sourceDuration: number, targetDuration: number): string {
+  const speed = sourceDuration / Math.max(0.1, targetDuration);
+  const filters: string[] = [];
+  const playbackRate = Math.min(1.25, Math.max(0.8, speed));
+  if (Math.abs(playbackRate - 1) > 0.01) filters.push(`atempo=${playbackRate}`);
+  filters.push("asetpts=PTS-STARTPTS");
+  return `${input}${filters.join(",")}`;
 }
 
 async function writeClipSubtitles(jobDir: string, index: number, clipStart: number, clipEnd: number, transcript: TranscriptSegment[]): Promise<string | null> {
