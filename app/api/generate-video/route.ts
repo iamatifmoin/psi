@@ -29,12 +29,19 @@ export async function POST(request: Request) {
     await extractAudio(sourcePath, audioPath);
     const [transcript, visuals] = await Promise.all([transcribeAudio(audioPath), scanVisuals(sourcePath)]);
     const timeline: TimelinePayload = { duration: metadata.duration, transcript, visuals };
-    const decision = await directHighlight(timeline);
-    const rendered = await renderHighlight({ sourcePath, jobDir, decision });
+    const directorDecision = await directHighlight(timeline);
+    const decision = {
+      ...directorDecision,
+      clips: directorDecision.clips.map((clip) => ({ ...clip, energy_score: calculateEnergyScore(clip.start_time, clip.end_time, transcript, visuals) })),
+    };
+    const rendered = await renderHighlight({ sourcePath, jobDir, decision, transcript });
+    await fs.stat(path.join(process.cwd(), rendered.videoUrl.replace(/^\//, "")));
     return Response.json({ videoUrl: rendered.videoUrl, transcript, clips: rendered.clips, introNarration: decision.intro_narration, outroNarration: decision.outro_narration, duration: metadata.duration });
   } catch (error) {
     return failure(error instanceof Error ? error.message : "Video generation failed.", 500);
-  } finally { await fs.rm(jobDir, { recursive: true, force: true }).catch(() => undefined); }
+  } finally {
+    await fs.rm(jobDir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 function failure(error: string, status: number): Response { return Response.json({ error, errorSource: "app", errorKind: "internal", external: false }, { status }); }
@@ -43,4 +50,11 @@ async function cleanArtifactDirectory(directory: string): Promise<void> {
   await fs.mkdir(directory, { recursive: true });
   const entries = await fs.readdir(directory, { withFileTypes: true });
   await Promise.all(entries.map((entry) => fs.rm(path.join(directory, entry.name), { recursive: entry.isDirectory(), force: true })));
+}
+
+function calculateEnergyScore(start: number, end: number, transcript: TimelinePayload["transcript"], visuals: TimelinePayload["visuals"]): number {
+  const visualPoints = visuals.filter((observation) => observation.time >= start && observation.time <= end);
+  const visualScore = visualPoints.length > 0 ? visualPoints.reduce((sum, observation) => sum + observation.score, 0) / visualPoints.length : 0.5;
+  const hasSpeech = transcript.some((segment) => segment.start < end && segment.end > start);
+  return Math.round(Math.max(0, Math.min(1, visualScore * 0.6 + (hasSpeech ? 0.4 : 0.15))) * 100);
 }
