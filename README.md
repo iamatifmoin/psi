@@ -31,11 +31,13 @@ No separate FFmpeg installation is required for the normal Node workflow; the pr
 
 ## Demo flow
 
-1. Upload an MP4.
+1. Drop an MP4 onto the upload area or choose one with the file picker.
 2. Click `Generate highlight`.
 3. Wait for transcription, visual scanning, AI direction, narration, and rendering.
 4. Play the original and generated videos side by side.
 5. Use transcript and selected-clip timestamps to seek.
 6. Download the final MP4.
+
+Each new generation keeps only the latest generated artifact. Temporary processing files are removed automatically after success or failure.
 
 See `REQUIREMENTS.md`, `ARCHITECTURE.md`, `MIGRATION_PLAN.md`, and `DEMO_RUNBOOK.md` for the planning and handoff details.

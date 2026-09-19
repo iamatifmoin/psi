@@ -5,12 +5,20 @@ import "@/lib/ffmpeg-config";
 import type { DirectorDecision } from "./gemini";
 import { synthesizeSpeech } from "./tts";
 
-export async function renderHighlight(input: { sourcePath: string; jobDir: string; decision: DirectorDecision }): Promise<{ videoUrl: string }> {
+const NARRATION_CARD_SECONDS = 8;
+
+export type RenderedClip = DirectorDecision["clips"][number] & { result_start_time: number };
+
+export async function renderHighlight(input: { sourcePath: string; jobDir: string; decision: DirectorDecision }): Promise<{ videoUrl: string; clips: RenderedClip[] }> {
   const segmentPaths: string[] = [];
+  let resultOffset = NARRATION_CARD_SECONDS;
+  const renderedClips: RenderedClip[] = [];
   for (const [index, clip] of input.decision.clips.entries()) {
     const segmentPath = path.join(input.jobDir, `clip-${index}.mp4`);
     await renderClip(input.sourcePath, segmentPath, clip.start_time, clip.end_time - clip.start_time);
     segmentPaths.push(segmentPath);
+    renderedClips.push({ ...clip, result_start_time: resultOffset });
+    resultOffset += clip.end_time - clip.start_time;
   }
   const highlightsPath = path.join(input.jobDir, "highlights.mp4");
   await concatSegments(segmentPaths, highlightsPath);
@@ -21,7 +29,7 @@ export async function renderHighlight(input: { sourcePath: string; jobDir: strin
   await fs.mkdir(outputDir, { recursive: true });
   const outputName = `${path.basename(input.jobDir)}.mp4`;
   await concatNarratedSections(introPath, highlightsPath, outroPath, path.join(outputDir, outputName));
-  return { videoUrl: `/generated/${outputName}` };
+  return { videoUrl: `/generated/${outputName}`, clips: renderedClips };
 }
 
 async function renderClip(input: string, output: string, start: number, duration: number): Promise<void> {
@@ -36,6 +44,6 @@ async function concatSegments(segments: string[], output: string): Promise<void>
 
 async function concatNarratedSections(intro: string, highlights: string, outro: string, output: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    ffmpeg().input("color=c=black:s=1280x720:r=30").inputOptions(["-f", "lavfi", "-t", "8"]).input(intro).input(highlights).input("color=c=black:s=1280x720:r=30").inputOptions(["-f", "lavfi", "-t", "8"]).input(outro).complexFilter(["[0:v]format=yuv420p[introv]", "[3:v]format=yuv420p[outrov]", "[0:v][1:a][2:v][2:a][3:v][4:a]concat=n=3:v=1:a=1[v][a]"]).outputOptions(["-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run();
+    ffmpeg().input("color=c=black:s=1280x720:r=30").inputOptions(["-f", "lavfi", "-t", String(NARRATION_CARD_SECONDS)]).input(intro).input(highlights).input("color=c=black:s=1280x720:r=30").inputOptions(["-f", "lavfi", "-t", String(NARRATION_CARD_SECONDS)]).input(outro).complexFilter(["[0:v]format=yuv420p[introv]", "[3:v]format=yuv420p[outrov]", "[0:v][1:a][2:v][2:a][3:v][4:a]concat=n=3:v=1:a=1[v][a]"]).outputOptions(["-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]).output(output).on("end", () => resolve()).on("error", reject).run();
   });
 }
